@@ -46,6 +46,11 @@ available_sources = (
 
 global_sources = ("View", "SRTM", "ALOS")
 
+# One common angular grid also covers Copernicus's narrower northern rasters.
+# Include boundary nodes and 0.01 degrees of neighboring terrain on each side.
+_COP30_SAMPLES = 3600
+_COP30_MARGIN = 36
+
 
 # ---------------------------------------------------------------------------
 # Copernicus GLO-30 — chemin de rangement du fichier téléchargé.
@@ -136,7 +141,12 @@ class DEM:
             short_source = available_sources[
                 available_sources.index(source) - 1
             ]
-            if short_source in global_sources:
+            if short_source == "COP30":
+                (
+                    self.epsg, self.x0, self.y0, self.x1, self.y1,
+                    self.nodata, self.nxdem, self.nydem, self.alt_dem,
+                ) = build_cop30_raster(self.lat, self.lon, info_only)
+            elif short_source in global_sources:
                 (
                     self.epsg,
                     self.x0,
@@ -151,30 +161,7 @@ class DEM:
                     short_source, self.lat, self.lon, info_only
                 )
             else:
-                # ALERTE JOINTURE — Copernicus GLO-30 est une source PAR DALLE
-                # UNIQUE (comme NED) : contrairement à View/SRTM/ALOS, elle ne
-                # bénéficie pas de la marge de raccord 3×3 (build_combined_raster).
-                # Une légère couture peut donc apparaître au bord des tuiles.
-                # On prévient l'utilisateur dans le log dès qu'une tuile utilise
-                # cette source (message bilingue, non bloquant, aucun build gâché).
-                if short_source == "COP30":
-                    UI.lvprint(
-                        1,
-                        _L_dem(
-                            "    ATTENTION : Copernicus GLO-30 est une source "
-                            "par dalle unique (sans marge de raccord) — une "
-                            "legere jointure peut apparaitre au bord des "
-                            "tuiles.",
-                            "    WARNING: Copernicus GLO-30 is a single-tile "
-                            "source (no overlap margin) — a slight seam may "
-                            "appear at tile edges.",
-                        ),
-                    )
                 if ensure_elevation(short_source, self.lat, self.lon):
-                    # elevation_data() renvoie None pour une source qu'elle ne
-                    # connaît pas (ex. COP30) : on retombe alors sur le chemin
-                    # Copernicus fabriqué localement. Les sources existantes
-                    # (NED…) restent inchangées.
                     (
                         self.epsg,
                         self.x0,
@@ -186,28 +173,12 @@ class DEM:
                         self.nydem,
                         self.alt_dem,
                     ) = read_elevation_from_file(
-                        FNAMES.elevation_data(short_source, self.lat, self.lon)
-                        or cop30_file_name(self.lat, self.lon),
+                        FNAMES.elevation_data(short_source, self.lat, self.lon),
                         self.lat,
                         self.lon,
                         info_only,
                         3601,
                     )
-                    # CORRECTIF hautes latitudes (Canada, Écosse, Scandinavie,
-                    # Baltique, Russie, Alaska…) : Copernicus GLO-30 sert
-                    # MOINS de colonnes par degré de longitude au-delà de ~50°.
-                    # La grille n'est plus carrée — c'est NORMAL. On accepte
-                    # la taille réelle lue dans le GeoTIFF et on journalise.
-                    # Ne JAMAIS refuser la tuile pour nxdem != nydem.
-                    if short_source == "COP30" and self.nxdem and self.nydem:
-                        if self.nxdem != self.nydem:
-                            UI.vprint(
-                                1,
-                                "    INFO: Copernicus GLO-30 non-square DEM "
-                                "at lat=%d (%d cols × %d rows) — expected "
-                                "above ~50° (fewer longitude samples)."
-                                % (self.lat, self.nxdem, self.nydem),
-                            )
                 else:
                     (
                         self.epsg,
@@ -507,6 +478,95 @@ class DEM:
             tmp2 = subdem.alt_vec_strict(way)
             tmp[tmp2 != subdem.nodata] = tmp2[tmp2 != subdem.nodata]
         return tmp
+
+################################################################################
+def build_cop30_raster(lat, lon, info_only=False):
+    """Warp the 3x3 neighborhood onto identical, globally aligned Point nodes.
+
+    Copernicus includes north/west boundary samples, but excludes south/east.
+    Reading a single source therefore clamps those missing boundaries. Each
+    output includes the same neighboring samples at every shared coordinate.
+    Northern files may have fewer columns; geographic transforms, rather than
+    array concatenation, handle their different resolutions.
+    """
+    step = 1.0 / _COP30_SAMPLES
+    margin = _COP30_MARGIN * step
+    size = _COP30_SAMPLES + 1 + 2 * _COP30_MARGIN
+    metadata = (4326, -margin, -margin, 1 + margin, 1 + margin,
+                -32768, size, size)
+    if info_only:
+        return (*metadata, None)
+
+    def fail(lat0, lon0, error):
+        message = _L_dem(
+            "ERROR: Donnees Copernicus manquantes ou invalides sur terre "
+            "(lat=%d, lon=%d) : %s. Construction arretee." % (lat0, lon0, error),
+            "ERROR: Missing or invalid Copernicus land data "
+            "(lat=%d, lon=%d): %s. Build stopped." % (lat0, lon0, error),
+        )
+        UI.red_flag = True
+        UI.exit_message_and_bottom_line(message)
+        raise RuntimeError(message)
+
+    try:
+        import rasterio
+        from rasterio.transform import from_origin
+        from rasterio.warp import reproject, Resampling
+    except ImportError as error:
+        fail(lat, lon, error)
+
+    world = numpy.asarray(Image.open(os.path.join(FNAMES.Utils_dir, "world_tiles.png")))
+    # Pixel centers are node coordinates; the GeoTIFF corner is half a step away.
+    transform = from_origin(lon - margin - step / 2,
+                            lat + 1 + margin + step / 2, step, step)
+    elevations = numpy.full((size, size), -32768, dtype=numpy.float32)
+    required_land = numpy.zeros((size, size), dtype=bool)
+    xs = lon - margin + numpy.arange(size) * step
+    ys = lat + 1 + margin - numpy.arange(size) * step
+    UI.vprint(1, "    Copernicus GLO-30: loading neighboring rasters with overlap.")
+    for lat0, lon0 in itertools.product(range(lat - 1, lat + 2), range(lon - 1, lon + 2)):
+        wrapped_lon = (lon0 + 180) % 360 - 180
+        is_land = -90 <= lat0 < 90 and bool(world[89 - lat0, 180 + wrapped_lon])
+        path = cop30_file_name(lat0, wrapped_lon)
+        rows = (ys > lat0 + step * 1e-7) & (ys <= lat0 + 1 + step * 1e-7)
+        cols = (xs >= lon0 - step * 1e-7) & (xs < lon0 + 1 - step * 1e-7)
+        if is_land:
+            required_land[numpy.ix_(rows, cols)] = True
+        if not is_land and not os.path.isfile(path):
+            # Known ocean (and the padding beyond a pole) needs no download.
+            elevations[numpy.ix_(rows, cols)] = 0
+            continue
+        if not ensure_elevation("COP30", lat0, wrapped_lon, verbose=is_land):
+            fail(lat0, wrapped_lon, "download unavailable: " + path)
+        try:
+            with rasterio.open(path) as src:
+                t = src.transform
+                if (src.crs is None or src.crs.to_epsg() != 4326
+                        or t.a <= 0 or t.e >= 0 or t.b or t.d):
+                    raise ValueError("expected a north-up EPSG:4326 raster")
+                if not numpy.allclose(
+                        (t.c + t.a / 2, t.f + t.e / 2, src.width * t.a, -src.height * t.e),
+                        (wrapped_lon, lat0 + 1, 1, 1), rtol=0, atol=1e-6):
+                    raise ValueError("unexpected Copernicus Point-grid extent")
+                # At the dateline, place the wrapped neighbor beside this tile.
+                shifted = rasterio.Affine.translation(lon0 - wrapped_lon, 0) * t
+                reproject(source=rasterio.band(src, 1), destination=elevations,
+                          src_transform=shifted, src_crs=src.crs,
+                          src_nodata=src.nodata if src.nodata is not None else -32768,
+                          dst_transform=transform, dst_crs="EPSG:4326", dst_nodata=-32768,
+                          resampling=Resampling.bilinear, init_dest_nodata=False,
+                          # Round source pixel coordinates consistently: a node
+                          # at half a coarse northern pixel must not fall just
+                          # outside both adjacent files through float error.
+                          SRC_COORD_PRECISION="0.000001", ERROR_THRESHOLD=0)
+        except Exception as error:
+            fail(lat0, wrapped_lon, str(error) + ": " + path)
+    invalid = ((elevations == -32768) | ~numpy.isfinite(elevations)
+               | (elevations < _ALT_MIN_PLAUSIBLE) | (elevations > _ALT_MAX_PLAUSIBLE))
+    if numpy.any(invalid & required_land):
+        fail(lat, lon, "uncovered or invalid land elevation samples")
+    return (*metadata, elevations)
+
 
 ################################################################################
 def build_combined_raster(source, lat, lon, info_only):
