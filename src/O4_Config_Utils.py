@@ -1783,8 +1783,6 @@ class Ortho4XP_Config(tk.Toplevel):
             # Écrire toutes les variables tile dans l'ordre de list_tile_vars
             # (inclut custom_dem, fill_nodata, default_website, default_zl)
             for var in list_tile_vars:
-                if var == "zone_list":
-                    continue
                 try:
                     v = self.v_[var]
                     # Supporte tk.StringVar ou objet parent avec .get()
