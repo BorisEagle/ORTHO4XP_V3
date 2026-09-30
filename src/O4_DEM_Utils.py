@@ -523,6 +523,7 @@ def build_cop30_raster(lat, lon, info_only=False):
     required_land = numpy.zeros((size, size), dtype=bool)
     xs = lon - margin + numpy.arange(size) * step
     ys = lat + 1 + margin - numpy.arange(size) * step
+    row_pixel_width = {}
     UI.vprint(1, "    Copernicus GLO-30: loading neighboring rasters with overlap.")
     for lat0, lon0 in itertools.product(range(lat - 1, lat + 2), range(lon - 1, lon + 2)):
         wrapped_lon = (lon0 + 180) % 360 - 180
@@ -533,8 +534,17 @@ def build_cop30_raster(lat, lon, info_only=False):
         if is_land:
             required_land[numpy.ix_(rows, cols)] = True
         if not is_land and not os.path.isfile(path):
-            # Known ocean (and the padding beyond a pole) needs no download.
-            elevations[numpy.ix_(rows, cols)] = 0
+            # Ocean is a virtual Point raster, with the same half-pixel
+            # footprint as its western neighbor. Whole-degree rectangles
+            # leave a gap after the last pixel of a coarse northern TIFF.
+            # Before seeing any TIFF in this latitude band, one arc-second
+            # is sufficient: the next real raster overwrites any overlap.
+            dx = row_pixel_width.get(lat0, step)
+            sea_rows = ((ys > lat0 + step / 2 + step * 1e-7)
+                        & (ys <= lat0 + 1 + step / 2 + step * 1e-7))
+            sea_cols = ((xs >= lon0 - dx / 2 - step * 1e-7)
+                        & (xs < lon0 + 1 - dx / 2 - step * 1e-7))
+            elevations[numpy.ix_(sea_rows, sea_cols)] = 0
             continue
         if not ensure_elevation("COP30", lat0, wrapped_lon, verbose=is_land):
             fail(lat0, wrapped_lon, "download unavailable: " + path)
@@ -548,6 +558,7 @@ def build_cop30_raster(lat, lon, info_only=False):
                         (t.c + t.a / 2, t.f + t.e / 2, src.width * t.a, -src.height * t.e),
                         (wrapped_lon, lat0 + 1, 1, 1), rtol=0, atol=1e-6):
                     raise ValueError("unexpected Copernicus Point-grid extent")
+                row_pixel_width[lat0] = t.a
                 # At the dateline, place the wrapped neighbor beside this tile.
                 shifted = rasterio.Affine.translation(lon0 - wrapped_lon, 0) * t
                 reproject(source=rasterio.band(src, 1), destination=elevations,

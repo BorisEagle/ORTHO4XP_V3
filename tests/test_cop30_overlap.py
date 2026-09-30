@@ -113,6 +113,26 @@ class CopernicusOverlapTests(unittest.TestCase):
         for key in ("x0", "x1", "y0", "y1", "nxdem", "nydem"):
             self.assertEqual(getattr(info, key), getattr(full, key))
 
+    def test_coarse_coast_has_no_uncovered_nodes(self):
+        # Like Shetland +60-001: the eastern neighbor has no TIFF because it
+        # is all ocean. Its virtual footprint must fill the last half pixel.
+        for lat, width in ((60, 12), (85, 4)):
+            with self.subTest(lat=lat, width=width):
+                self.write(lat, -1, width=width)
+                dem = self.dem(lat, -1)
+                self.assertTrue(np.isfinite(dem.alt_dem).all())
+                self.assertFalse((dem.alt_dem == dem.nodata).any())
+                self.assertGreater(dem.alt((.5, .5)), 100)
+                self.assertEqual(dem.alt((1, .5)), 0)
+
+    def test_coastal_border_agrees_with_adjacent_ocean_tile(self):
+        self.write(60, -1, width=12)
+        a, b = self.dem(60, -1), self.dem(60, 0)
+        x = np.linspace(.97, 1.03, 101)
+        np.testing.assert_allclose(
+            a.alt_vec(np.column_stack((x, np.full_like(x, .5)))),
+            b.alt_vec(np.column_stack((x - 1, np.full_like(x, .5)))), atol=.001)
+
     def test_missing_land_neighbor_aborts(self):
         self.region(43, 6)
         Path(self.path(43, 7)).unlink()

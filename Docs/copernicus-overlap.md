@@ -23,7 +23,9 @@ northern rasters meet. Longitude wrapping handles the international dateline.
   additional neighboring rasters into the normal elevation cache. Subsequent
   adjacent builds reuse them.
 - Ocean tiles identified by the existing `Utils/world_tiles.png` map use zero
-  elevation when no local TIFF exists and need no download.
+  elevation when no local TIFF exists and need no download. These virtual
+  ocean rasters match the half-pixel footprint of the preceding real TIFF,
+  preventing uncovered columns where coarse northern rasters meet ocean.
 - Missing, unreadable, misplaced, or invalid elevation data over mapped land
   stops the build with an error. It is not silently replaced with flat land.
 - The metadata-only path returns the same grid information without downloads.
@@ -53,9 +55,10 @@ Python environment:
 python -m unittest discover -s tests -v
 ```
 
-The 14 tests cover shared borders, changing northern raster widths (including
+The 16 tests cover shared borders, changing northern raster widths (including
 native-height 3,600-row rasters), the dateline, known ocean, missing or invalid
-land data, metadata-only loading, and existing custom/View source behavior.
+land data, coarse coastal footprints, metadata-only loading, and existing
+custom/View source behavior.
 
 An isolated rebuild of `+43+006` and `+43+007` produced these results:
 
@@ -73,3 +76,8 @@ headers and mip-chain sizes passed validation. Tile cfg bytes were preserved.
 
 These are file-level checks. A visual test flight in X-Plane is still required
 before considering the change visually validated.
+
+The coastal correction was additionally verified with the actual cached
+Shetland rasters: Step 1 for `+60-001` completed, and all 3,601 border samples
+matched the adjacent ocean tile. The raw DEMs for the previously tested
+southern pair remained byte-for-byte identical.
