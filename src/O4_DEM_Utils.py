@@ -45,6 +45,7 @@ available_sources = (
 )
 
 global_sources = ("View", "SRTM", "ALOS")
+default_source = available_sources[available_sources.index("COP30") + 1]
 
 # One common angular grid also covers Copernicus's narrower northern rasters.
 # Include boundary nodes and 0.01 degrees of neighboring terrain on each side.
@@ -131,7 +132,7 @@ class DEM:
             if os.path.exists(FNAMES.generic_tif(self.lat, self.lon)):
                 source = FNAMES.generic_tif(self.lat, self.lon)
             else:
-                source = available_sources[1]
+                source = default_source
         if ";" in source:
             parts = [p.strip() for p in source.split(";")]
             source, local_sources = parts[0], parts[1:]

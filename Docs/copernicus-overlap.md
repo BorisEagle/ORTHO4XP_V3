@@ -1,5 +1,16 @@
 # Copernicus GLO-30 tile borders
 
+## Default elevation source
+
+Copernicus GLO-30 is the built-in elevation default. A tile cfg without
+`custom_dem` inherits the global elevation setting, which remains editable.
+A blank `custom_dem=` uses Copernicus unless the existing automatic local
+tile TIFF override is present. Explicit selections of Viewfinder or another
+source, custom raster paths, and composite sources remain supported.
+
+Restart Ortho4XP after updating the source files. Existing meshes are not
+changed until rebuilt.
+
 The Copernicus loader assembles the surrounding 3 x 3 source tiles onto a
 shared geographic grid. Each Ortho4XP tile includes a 0.01-degree margin
 on every side, with 3,673 x 3,673 elevation nodes at one arc-second spacing.

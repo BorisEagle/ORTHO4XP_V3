@@ -433,8 +433,8 @@ too low to grab these details.",
     # Other
     "custom_dem": {
         "type": str,
-        "default": "",
-        "hint": "Path to an elevation data file to be used instead of the default Viewfinderpanoramas.org ones (J. de Ferranti). The raster must be in geopgraphical coordinates (EPSG:4326) but the extent need not match the tile boundary (requires Gdal). Regions of the tile that are not covered by the raster are mapped to zero altitude (can be useful for high resolution data over islands in particular).     ",
+        "default": DEM.default_source,
+        "hint": "Elevation source or path to a custom elevation raster. The default is Copernicus GLO-30 (AWS Open Data). A blank field also uses Copernicus unless an automatic local tile TIFF exists. A missing tile setting inherits the global setting. Custom rasters must use geographical coordinates (EPSG:4326), but their extent need not match the tile boundary. Regions not covered by a custom raster are mapped to zero altitude.",
     },
     "custom_bathy_dem": {
         "type": str,
