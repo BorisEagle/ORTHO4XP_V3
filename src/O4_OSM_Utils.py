@@ -2,7 +2,9 @@ import os
 import time
 import io
 import bz2
+import json
 import random
+from urllib.parse import quote, urlsplit
 import requests
 import numpy
 from shapely import geometry, ops
@@ -14,6 +16,50 @@ overpass_servers = {
     "KU": "https://overpass.kumi.systems/api/interpreter",
     "RU": "https://maps.mail.ru/osm/tools/overpass/api/interpreter",  # Correctif shred86 : rambler.ru mort
 }
+
+
+def load_custom_overpass_servers():
+    """Keep private server settings outside source files and query logs."""
+    def valid_endpoint(value):
+        if not isinstance(value, str) or any(c.isspace() for c in value):
+            return False
+        parsed = urlsplit(value)
+        return parsed.scheme in ('http', 'https') and bool(parsed.hostname) and '#' not in value
+
+    key_file = os.path.join(FNAMES.Ortho4XP_dir, 'overpass_server_api_key.txt')
+    if os.path.isfile(key_file):
+        try:
+            with open(key_file, encoding='utf-8-sig') as f:
+                key = f.read().strip()
+            if not key or any(c.isspace() for c in key):
+                raise ValueError
+            endpoint = (key if key.startswith(('http://', 'https://')) else
+                        'https://overpass.nextgis.com/' + quote(key, safe='') + '/api/interpreter')
+            if not valid_endpoint(endpoint):
+                raise ValueError
+            overpass_servers['NG'] = endpoint
+        except (OSError, ValueError):
+            UI.vprint(0, 'Cannot read NextGIS key file; using other OSM servers.')
+
+    config_file = os.path.join(FNAMES.Ortho4XP_dir, 'overpass_servers.json')
+    if not os.path.isfile(config_file):
+        return
+    try:
+        with open(config_file, encoding='utf-8-sig') as f:
+            custom = json.load(f)
+        if not isinstance(custom, dict):
+            raise ValueError
+        for code, endpoint in custom.items():
+            if (not isinstance(code, str) or not code.strip() or code != code.strip()
+                    or code == 'random' or not valid_endpoint(endpoint)):
+                raise ValueError
+        overpass_servers.update(custom)
+    except (OSError, ValueError):
+        # Exception text can contain URLs with API keys; never print it.
+        UI.vprint(0, 'Cannot read overpass_servers.json; using existing OSM servers.')
+
+
+load_custom_overpass_servers()
 overpass_server_choice = "KU"  # V3.2 — KU (Kumi Systems) plus fiable que DE en 2026
 # Amélioration V3.2 : mémoire des serveurs en panne partagée entre toutes les
 # requêtes de la session — un serveur qui vient d'échouer est évité pendant
@@ -516,6 +562,16 @@ def OSM_query_to_OSM_layer(
 
 ################################################################################
 def get_overpass_data(query, bbox, server_code=None):
+    if not overpass_servers:
+        UI.vprint(0, 'No OSM servers configured; cannot download OSM data.')
+        return 0
+    preferred_server = server_code or overpass_server_choice
+    if preferred_server != 'random' and preferred_server not in overpass_servers:
+        UI.vprint(1, 'Unknown OSM server code', preferred_server,
+                  '- using available servers. Check your custom server settings.')
+        preferred_server = 'random'
+    if preferred_server == 'random':
+        server_code = None
     tentative = 1
     # V3.2 — Session créée une seule fois (évite le spam TCP sur le serveur Overpass)
     # et User-Agent identifié conformément à la politique OSM.
@@ -537,27 +593,29 @@ def get_overpass_data(query, bbox, server_code=None):
             _cooled = {k for k, t in _server_cooldown.items()
                        if _now - t < _SERVER_COOLDOWN}
             _avoid = _failed_codes | _cooled
-            if overpass_server_choice == "random" or _avoid:
+            if preferred_server == "random" or _avoid:
                 _pool = [k for k in overpass_servers
                          if k not in _avoid] or \
                         [k for k in overpass_servers
                          if k not in _failed_codes] or \
                         list(overpass_servers)
                 true_server_code = (
-                    overpass_server_choice
-                    if overpass_server_choice in _pool
-                    and overpass_server_choice != "random"
+                    preferred_server
+                    if preferred_server in _pool
+                    and preferred_server != "random"
                     else random.choice(_pool)
                 )
             else:
-                true_server_code = overpass_server_choice
+                true_server_code = preferred_server
         base_url = overpass_servers[true_server_code]
         if isinstance(query, str):
             overpass_query = query + str(bbox) + ";"
         else:  # query is a tuple
             overpass_query = "".join([x + str(bbox) + ";" for x in query])
-        url = base_url + "?data=(" + overpass_query + ");(._;>>;);out meta;"
-        UI.vprint(3, url)
+        separator = '&' if '?' in base_url else '?'
+        url = base_url + separator + "data=(" + overpass_query + ");(._;>>;);out meta;"
+        # Custom endpoint paths may contain API keys.
+        UI.vprint(3, 'OSM server', true_server_code, 'query:', overpass_query)
         try:
             r = s.get(url, timeout=60)
             UI.vprint(3, "OSM response status :", r)
