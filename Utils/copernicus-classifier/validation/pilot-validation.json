@@ -1,0 +1,18 @@
+{
+  "method": "Compact binary decoder compared with a separately retained DSFTool text observation",
+  "expected_DSFTool_point": {
+    "latitude": 28.284349966,
+    "longitude": -16.858403906,
+    "installed_dsf_height_m": 587.2,
+    "copernicus_height_m": 587.1896829676957,
+    "viewfinder_height_m": 323.73387894250675
+  },
+  "binary_decoder_point": [
+    -16.858403906309604,
+    28.2843499656672,
+    587.1999999999999
+  ],
+  "coordinate_difference_degrees": 6.424052401143854e-10,
+  "height_difference_m": 1.1368683772161603e-13,
+  "full_library_scan_run": false
+}
