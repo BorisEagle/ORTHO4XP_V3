@@ -2,6 +2,14 @@
 
 **[🇫🇷 Français](#ortho4xp-v3--version-officielle) | [🇬🇧 English](#ortho4xp-v3--official-version)**
 
+### Installed elevation audit utility
+
+To check which installed tiles match Copernicus or cached Viewfinder heights,
+open [Utils/copernicus-classifier](Utils/copernicus-classifier/README.md) and run
+`Check-Copernicus.cmd`. It creates a conversion list, a review list and an
+Excel-ready CSV in `Documents/Ortho4XP-DEM-Audit`, without modifying scenery.
+Automated regression checks live in `tests`.
+
 > [!IMPORTANT]
 > ### 🍎 Utilisateurs Mac / Mac users
 > **🇫🇷 Ne téléchargez PAS le ZIP du bouton vert « Code ».** Sur Mac, l'installation se fait avec **un seul fichier DMG**, disponible dans **Releases** (colonne de droite de cette page → *Releases* → rubrique *Assets*).
