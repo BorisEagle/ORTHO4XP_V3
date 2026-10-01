@@ -5,9 +5,10 @@
 ### Installed elevation audit utility
 
 To check which installed tiles match Copernicus or cached Viewfinder heights,
-open [Utils/copernicus-classifier](Utils/copernicus-classifier/README.md) and run
-`Check-Copernicus.cmd`. It creates a conversion list, a review list and an
-Excel-ready CSV in `Documents/Ortho4XP-DEM-Audit`, without modifying scenery.
+run `Check-Heights.cmd` in the application folder; see
+[Utils/copernicus-classifier](Utils/copernicus-classifier/README.md) for details.
+It creates a conversion list, a review list and an Excel-ready CSV in the
+application's `Height-Reports` folder, without modifying scenery.
 Automated regression checks live in `tests`.
 
 > [!IMPORTANT]
