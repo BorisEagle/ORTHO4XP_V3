@@ -2,16 +2,16 @@
 
 ## Start the audit
 
-Open `Utils/copernicus-classifier` inside the Ortho4XP installation and double-click **Check-Copernicus.cmd**. It scans your `zOrtho4XP_*` tile folders.
+Double-click **Check-Heights.cmd** in the Ortho4XP installation folder. Alternatively, open `Utils/copernicus-classifier` and double-click **Check-Copernicus.cmd**. It scans your `zOrtho4XP_*` tile folders.
 
-Reports are written outside the application, in **`%USERPROFILE%\Documents\Ortho4XP-DEM-Audit`**. The `tests` folder is for automated regression checks; the runnable utility lives under `Utils`.
+All reports and sample caches are written in **`Height-Reports` inside the Ortho4XP installation**. The `tests` folder is for automated regression checks; the runnable utility lives under `Utils`.
 
 The supplied defaults are:
 
 - Ortho4XP: detected from the app containing `Utils/copernicus-classifier`.
 - Scenery: `E:\SteamLibrary\steamapps\common\X-Plane 12\Custom Scenery`
 
-It **does not rebuild tiles, change configurations, delete imagery, or write into those directories**. A full-library audit has not been run during development. Only Tenerife `+28-017` and Rome `+41+012` were checked.
+It **does not rebuild tiles, change configurations, delete imagery, or modify scenery and elevation caches**. It only writes audit results into the report folder. A full-library audit has not been run during development. Only Tenerife `+28-017` and Rome `+41+012` were checked.
 
 Local Copernicus TIFFs and Viewfinder HGTs are used first. When a Copernicus TIFF is missing, the normal launch checks the public Copernicus COG and reads small raster windows over the network. It does not save a complete replacement DEM into Ortho4XP. Missing Viewfinder HGTs are not downloaded; these tiles require review because there is no historical reference to compare against.
 
@@ -83,7 +83,7 @@ Keep airport exclusion data, scenery and reference files unchanged while an audi
 ## Check selected tiles only
 
 ```powershell
-& '.\Check-Copernicus.cmd' --tile=+28-017 --tile=+41+012 --offline --output "$env:USERPROFILE\Documents\Ortho4XP-DEM-Pilot"
+& '.\Check-Copernicus.cmd' --tile=+28-017 --tile=+41+012 --offline
 ```
 
 Always use `--tile=...`, including for southern hemisphere tiles whose names start with `-`. A selected-tile run checks scenery priority for those names; it does not decode unrelated tiles.
@@ -94,7 +94,7 @@ Change paths if needed:
 & '.\Check-Copernicus.cmd' --ortho 'E:\GAMES\ORTHO4XP_V3-3.6' --scenery 'E:\SteamLibrary\steamapps\common\X-Plane 12\Custom Scenery'
 ```
 
-Reports must be outside the Ortho4XP and Custom Scenery directories. Keep this folder's script, launcher and `airports.csv` together. The launcher tries the application's venv first, then the working bundled Python on this computer; the script reuses Rasterio from the existing Ortho4XP venv if needed. Nothing is installed. On another computer, set `ORTHO_AUDIT_PYTHON` to a working Python executable with NumPy and Rasterio available.
+Reports inside Ortho4XP must use `Height-Reports` or its subfolders. An external output folder is also supported; output inside Custom Scenery is rejected. Keep this folder's script, launcher and `airports.csv` together. The launcher tries the application's venv first, then the working bundled Python on this computer; the script reuses Rasterio from the existing Ortho4XP venv if needed. Nothing is installed. On another computer, set `ORTHO_AUDIT_PYTHON` to a working Python executable with NumPy and Rasterio available.
 
 ## Validation and limits
 

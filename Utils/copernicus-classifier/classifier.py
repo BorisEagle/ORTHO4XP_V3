@@ -25,12 +25,11 @@ TILE_RE = re.compile(r'([+-]\d{2})([+-]\d{3})$')
 
 
 def runtime_defaults(here=HERE, home=None):
-    """Find an installed app; keep reports outside its read-only directory."""
+    """Find an installed app and its dedicated height report directory."""
     here = Path(here)
     candidate = here.parents[1]
     ortho = candidate if (candidate/'Ortho4XP.py').is_file() else Path(ORTHO_DEFAULT)
-    home = Path(home) if home is not None else Path(os.environ.get('USERPROFILE', str(Path.home())))
-    return ortho, Path(SCENERY_DEFAULT), home/'Documents'/'Ortho4XP-DEM-Audit'
+    return ortho, Path(SCENERY_DEFAULT), ortho/'Height-Reports'
 
 
 def fingerprint(path):
@@ -806,10 +805,14 @@ def main(argv=None):
         parser.error('--per-cell must be between 4 and 128')
     try:
         args.output = args.output.resolve()
-        # Enforce the read-only contract even if a user supplies a mistaken output path.
-        for protected in (args.ortho.resolve(), args.scenery.resolve()):
-            if args.output == protected or protected in args.output.parents:
-                raise ValueError('Output must be outside Ortho4XP and Custom Scenery directories')
+        # Reports may live in the dedicated app folder; scenery and data stay untouched.
+        ortho_root, scenery_root = args.ortho.resolve(), args.scenery.resolve()
+        report_root = ortho_root/'Height-Reports'
+        if args.output == scenery_root or scenery_root in args.output.parents:
+            raise ValueError('Output must be outside Custom Scenery')
+        if args.output == ortho_root or (ortho_root in args.output.parents
+                and args.output != report_root and report_root not in args.output.parents):
+            raise ValueError('Reports inside Ortho4XP must use its Height-Reports folder')
         rasterio = load_rasterio(args.ortho)
         rows, ini = discover_tiles(args.scenery, args.tiles)
         args.output.mkdir(parents=True, exist_ok=True)

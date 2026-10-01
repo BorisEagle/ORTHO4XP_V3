@@ -196,7 +196,7 @@ class RasterTests(unittest.TestCase):
 
 
 class InventoryTests(unittest.TestCase):
-    def test_installed_utility_uses_app_root_and_writes_reports_outside_it(self):
+    def test_installed_utility_uses_app_root_and_its_height_reports_folder(self):
         with tempfile.TemporaryDirectory() as t:
             app = Path(t)/'Ortho4XP'
             utility = app/'Utils'/'copernicus-classifier'
@@ -205,8 +205,7 @@ class InventoryTests(unittest.TestCase):
             home = Path(t)/'User'
             ortho, scenery, output = runtime_defaults(utility, home)
             self.assertEqual(ortho, app)
-            self.assertEqual(output, home/'Documents'/'Ortho4XP-DEM-Audit')
-            self.assertNotIn(app, output.parents)
+            self.assertEqual(output, app/'Height-Reports')
 
     def test_higher_priority_mesh_prevents_conversion_of_shadowed_ortho(self):
         with tempfile.TemporaryDirectory() as t:
@@ -233,6 +232,25 @@ class InventoryTests(unittest.TestCase):
             root = Path(t)/'Custom Scenery'
             output = root/'audit'
             self.assertEqual(main(['--scenery', str(root), '--output', str(output), '--offline']), 1)
+            self.assertFalse(output.exists())
+
+    def test_cli_can_write_to_dedicated_height_reports_inside_app(self):
+        with tempfile.TemporaryDirectory() as t:
+            app = Path(t)/'Ortho4XP'
+            scenery = Path(t)/'Custom Scenery'
+            app.mkdir()
+            scenery.mkdir()
+            output = app/'Height-Reports'
+            self.assertEqual(main(['--ortho', str(app), '--scenery', str(scenery),
+                                   '--output', str(output), '--tile=+40+010', '--offline']), 0)
+            self.assertTrue((output/'summary.md').is_file())
+            self.assertEqual(list(scenery.iterdir()), [])
+
+    def test_cli_cannot_write_reports_into_elevation_cache(self):
+        with tempfile.TemporaryDirectory() as t:
+            app = Path(t)/'Ortho4XP'
+            output = app/'Elevation_data'/'audit'
+            self.assertEqual(main(['--ortho', str(app), '--output', str(output), '--offline']), 1)
             self.assertFalse(output.exists())
 
     def test_cli_reports_missing_tile_without_modifying_scenery(self):
