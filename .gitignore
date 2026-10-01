@@ -60,6 +60,8 @@ Providers/Global/Mapbox.lay
 
 # ── Fichiers de configuration personnels ────────────────────
 Ortho4XP.cfg
+overpass_servers.json
+overpass_server_api_key.txt
 *.cfg
 *.ini
 *.prefs
